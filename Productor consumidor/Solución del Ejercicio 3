@@ -1,0 +1,107 @@
+#include <pthread.h>
+#include <semaphore.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+#define N_PRODUCERS 3
+#define N_CONSUMERS 3
+#define BUFFER_SIZE 5
+#define ITEMS_PER_PRODUCER 4
+
+int buffer[BUFFER_SIZE];
+int in = 0;
+int out = 0;
+
+sem_t mutex;
+sem_t empty;
+sem_t full;
+
+// Función ejecutada por los hilos productores
+void *producer(void *param)
+{
+    long id = (long)param;
+
+    for (int i = 0; i < ITEMS_PER_PRODUCER; i++)
+    {
+        printf("[P%ld] Producing %d ...\n", id, i);
+        fflush(stdout);
+        sleep(rand() % 2);
+
+        sem_wait(&empty);
+        sem_wait(&mutex);
+
+        buffer[in] = i;
+        in = (in + 1) % BUFFER_SIZE;
+
+        sem_post(&mutex);
+        sem_post(&full);
+    }
+    pthread_exit(0);
+}
+
+// Función ejecutada por los hilos consumidores
+void *consumer(void *param)
+{
+    long id = (long)param;
+
+    for (int i = 0; i < ITEMS_PER_PRODUCER; i++)
+    {
+        sem_wait(&full);
+        sem_wait(&mutex);
+
+        int item = buffer[out];
+        out = (out + 1) % BUFFER_SIZE;
+
+        sem_post(&mutex);
+        sem_post(&empty);
+
+        printf("-----> [C%ld] consumed %d\n", id, item);
+        fflush(stdout);
+        sleep(rand() % 3);
+    }
+    pthread_exit(0);
+}
+
+int main()
+{
+    pthread_t producers[N_PRODUCERS];
+    pthread_t consumers[N_CONSUMERS];
+
+    srand(time(NULL));
+
+    // Inicialización de semáforos
+    sem_init(&mutex, 0, 1);
+    sem_init(&empty, 0, BUFFER_SIZE);
+    sem_init(&full, 0, 0);
+
+    // Creación de hilos productores (P0, P1, P2)
+    for (long i = 0; i < N_PRODUCERS; i++)
+    {
+        pthread_create(&producers[i], NULL, producer, (void *)i);
+    }
+
+    // Creación de hilos consumidores (C0, C1, C2)
+    for (long i = 0; i < N_CONSUMERS; i++)
+    {
+        pthread_create(&consumers[i], NULL, consumer, (void *)i);
+    }
+
+    // Esperar a que terminen todos los hilos
+    for (int i = 0; i < N_PRODUCERS; i++)
+    {
+        pthread_join(producers[i], NULL);
+    }
+    for (int i = 0; i < N_CONSUMERS; i++)
+    {
+        pthread_join(consumers[i], NULL);
+    }
+
+    // Destruir semáforos
+    sem_destroy(&mutex);
+    sem_destroy(&empty);
+    sem_destroy(&full);
+
+    printf("Ejecución del Ejercicio 3 finalizada exitosamente.\n");
+    return 0;
+}
